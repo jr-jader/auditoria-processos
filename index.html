@@ -117,6 +117,10 @@ window.__RAW = {"finalizados": "id,processo,etapa,responsavel,objeto,assunto,cat
 .ap .tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ap .tab { display: grid; gap: var(--cds-gap-lg); }
 .ap .tab[hidden] { display: none; }
+.ap .tile.clickable { cursor: pointer; }
+.ap .tile.clickable:hover { border-color: #e0b878; }
+.ap .tile.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ap tr.late td { color: var(--color-bad); }
 .ap .tile { position: relative; overflow: hidden; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
 .ap .tile .lab { text-transform: uppercase; letter-spacing: .06em; font-size: 0.68rem; font-weight: var(--cds-font-weight-medium); }
 .ap .tile .spark { height: 34px; margin-top: var(--cds-gap-xs); }
@@ -162,6 +166,7 @@ window.__RAW = {"finalizados": "id,processo,etapa,responsavel,objeto,assunto,cat
 
   <nav class="tabs" role="tablist" aria-label="Seções">
     <button role="tab" data-go="geral" aria-selected="true">Visão geral</button>
+    <button role="tab" data-go="prazos-tab" aria-selected="false">Prazos</button>
     <button role="tab" data-go="pessoas-tab" aria-selected="false">Por pessoa</button>
     <button role="tab" data-go="processos" aria-selected="false">Processos</button>
     <button role="tab" data-go="aba-tab" aria-selected="false">Aba Finalizados</button>
@@ -178,6 +183,7 @@ window.__RAW = {"finalizados": "id,processo,etapa,responsavel,objeto,assunto,cat
     <div class="tile"><span class="lab">Em aberto hoje</span><span class="big dash-skeleton" data-source="kpis" data-field="em_aberto" data-row="0">—</span><span class="sub"><span class="delta" id="d-estoque" data-source="estoque">—</span> · <span data-source="kpis" data-field="sem_resp" data-row="0">—</span> sem responsável</span><div class="spark" id="sp-est" data-source="estoque"></div></div>
     <div class="tile"><span class="lab">Saíram sem ir para Finalizados</span><span class="big dash-skeleton" data-source="kpis" data-field="removidos" data-row="0">—</span><span class="sub">apagados ou movidos para outro lugar</span></div>
     <div class="tile warn"><span class="lab">Em aberto há mais de 1 ano</span><span class="big dash-skeleton" data-source="kpis" data-field="mais_1_ano" data-row="0">—</span><span class="sub">precisam de revisão</span></div>
+    <div class="tile warn clickable" id="tile-prazo" role="button" tabindex="0"><span class="lab">Prazos vencidos em aberto</span><span class="big dash-skeleton" data-source="prazos_resumo" data-field="vencidos" data-row="0">—</span><span class="sub">ver aba Prazos →</span></div>
   </section>
 
   <section class="grid">
@@ -220,6 +226,59 @@ window.__RAW = {"finalizados": "id,processo,etapa,responsavel,objeto,assunto,cat
     </div>
   </section>
 
+  </div>
+
+  <div class="tab" id="prazos-tab" data-tab="prazos-tab" hidden>
+  <section class="sec-head">
+    <h2>Prazos de vencimento</h2>
+    <p class="note">Datas de vencimento lidas do próprio Assunto, por exemplo "Prorrogação (15/10)". Quando a data não tem ano, considero o ano da chegada, ou o seguinte se a data já tivesse passado. Referência: 26/10/2026.</p>
+  </section>
+  <section class="tiles" aria-label="Indicadores de prazo">
+    <div class="tile warn"><span class="lab">Em aberto com prazo vencido</span><span class="big dash-skeleton" data-source="prazos_resumo" data-field="vencidos" data-row="0">—</span><span class="sub">precisam de ação imediata</span></div>
+    <div class="tile"><span class="lab">Vencem nos próximos 30 dias</span><span class="big dash-skeleton" data-source="prazos_resumo" data-field="a_vencer_30" data-row="0">—</span><span class="sub">de <span data-source="prazos_resumo" data-field="abertos_com_prazo" data-row="0">—</span> abertos com prazo</span></div>
+    <div class="tile"><span class="lab">Finalizadas depois do vencimento</span><span class="big dash-skeleton" data-source="prazos_resumo" data-field="fin_atrasadas" data-row="0">—</span><span class="sub">de <span data-source="prazos_resumo" data-field="fin_com_prazo" data-row="0">—</span> finalizações com prazo em 2026</span></div>
+    <div class="tile hl"><span class="lab">Folga típica</span><span class="big dash-skeleton" data-source="prazos_resumo" data-field="folga_mediana" data-row="0">—</span><span class="sub">dias antes do vencimento (mediana)</span></div>
+  </section>
+  <section class="card" id="c-prazo-ab">
+    <h2>Processos em aberto com prazo</h2>
+    <p class="note">Do mais atrasado para o mais distante.</p>
+    <div class="tablebox">
+      <table id="t-prazo-ab" data-source="prazos_abertos" data-row-key="processo">
+        <thead><tr>
+          <th data-field="processo">Nº processo</th>
+          <th data-field="responsavel">Responsável</th>
+          <th data-field="objeto">Objeto</th>
+          <th data-field="assunto">Assunto</th>
+          <th data-field="vencimento">Vencimento</th>
+          <th data-field="dias" class="num">Situação</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+  <section class="grid">
+    <div class="card">
+      <h2>Com quanta antecedência as finalizações saíram</h2>
+      <p class="note">Finalizações de 2026 com prazo no assunto, por folga entre o fim e o vencimento.</p>
+      <div class="chart dash-skeleton" id="ch-folga" data-source="prazos_folga"></div>
+    </div>
+    <div class="card" id="c-prazo-fin">
+      <h2>Finalizações com prazo</h2>
+      <p class="note">Ordenadas pela menor folga. Em vermelho, as que saíram depois do vencimento.</p>
+      <div class="tablebox">
+        <table id="t-prazo-fin" data-source="prazos_finalizados" data-row-key="id">
+          <thead><tr>
+            <th data-field="processo">Nº processo</th>
+            <th data-field="assunto">Assunto</th>
+            <th data-field="vencimento">Vencimento</th>
+            <th data-field="finalizado">Finalizado</th>
+            <th data-field="folga" class="num">Folga</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
   </div>
 
   <div class="tab" id="pessoas-tab" data-tab="pessoas-tab" hidden>
@@ -617,6 +676,71 @@ dash.calc('faixas_prazo', {
   }
 });
 
+dash.calc('prazos_abertos', {
+  title: 'Prazos dos processos em aberto',
+  description: 'Vencimento lido do Assunto de cada processo em aberto e dias até ele (negativo = vencido), em relação a 26/10/2026.',
+  inputs: ['em_aberto'],
+  fn: (em_aberto) => {
+    const REF = Date.UTC(2026, 9, 26);
+    const venc = (assunto, chegada) => {
+      const m = (assunto || '').match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+      if (!m) return null;
+      let y;
+      if (m[3]) { y = Number(m[3]); if (y < 100) y += 2000; }
+      else { if (!chegada) return null; const b = Date.parse(chegada + 'T00:00:00Z'); y = new Date(b).getUTCFullYear(); if (Date.UTC(y, m[2] - 1, m[1]) < b - 60 * 864e5) y += 1; }
+      const t = Date.UTC(y, m[2] - 1, m[1]);
+      return (new Date(t).getUTCDate() === Number(m[1])) ? t : null;
+    };
+    return em_aberto.map(r => ({r, v: venc(r.assunto, r.chegada)})).filter(x => x.v != null)
+      .map(({r, v}) => ({processo: r.processo, responsavel: r.distribuicao, objeto: r.objeto, assunto: r.assunto, vencimento: new Date(v).toISOString().slice(0, 10), dias: Math.round((v - REF) / 864e5)}))
+      .sort((a, b) => a.dias - b.dias);
+  }
+});
+
+dash.calc('prazos_finalizados', {
+  title: 'Prazos das finalizações',
+  description: 'Vencimento lido do Assunto de cada finalização de 2026 e folga em dias (negativa = saiu depois do vencimento).',
+  inputs: ['finalizados'],
+  fn: (finalizados) => {
+    const venc = (assunto, chegada) => {
+      const m = (assunto || '').match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+      if (!m) return null;
+      let y;
+      if (m[3]) { y = Number(m[3]); if (y < 100) y += 2000; }
+      else { if (!chegada) return null; const b = Date.parse(chegada + 'T00:00:00Z'); y = new Date(b).getUTCFullYear(); if (Date.UTC(y, m[2] - 1, m[1]) < b - 60 * 864e5) y += 1; }
+      const t = Date.UTC(y, m[2] - 1, m[1]);
+      return (new Date(t).getUTCDate() === Number(m[1])) ? t : null;
+    };
+    return finalizados.map(r => ({r, v: venc(r.assunto, r.chegada)})).filter(x => x.v != null)
+      .map(({r, v}) => ({id: r.id, processo: r.processo, assunto: r.assunto, vencimento: new Date(v).toISOString().slice(0, 10), finalizado: r.finalizado, folga: Math.round((v - Date.parse(r.finalizado.slice(0, 10) + 'T00:00:00Z')) / 864e5)}))
+      .sort((a, b) => a.folga - b.folga);
+  }
+});
+
+dash.calc('prazos_resumo', {
+  title: 'Resumo de prazos',
+  description: 'Contagens de prazos vencidos, a vencer em 30 dias, finalizações atrasadas e folga mediana.',
+  inputs: ['prazos_abertos', 'prazos_finalizados'],
+  fn: (prazos_abertos, prazos_finalizados) => [{
+    vencidos: prazos_abertos.filter(r => r.dias < 0).length,
+    a_vencer_30: prazos_abertos.filter(r => r.dias >= 0 && r.dias <= 30).length,
+    abertos_com_prazo: prazos_abertos.length,
+    fin_atrasadas: prazos_finalizados.filter(r => r.folga < 0).length,
+    fin_com_prazo: prazos_finalizados.length,
+    folga_mediana: prazos_finalizados.length ? d3.median(prazos_finalizados, r => r.folga) : null
+  }]
+});
+
+dash.calc('prazos_folga', {
+  title: 'Folga das finalizações',
+  description: 'Finalizações com prazo agrupadas pela folga entre o fim e o vencimento.',
+  inputs: ['prazos_finalizados'],
+  fn: (prazos_finalizados) => {
+    const f = [['Depois do vencimento', -1e9, -1], ['0 a 7 dias antes', 0, 7], ['8 a 30 dias antes', 8, 30], ['Mais de 30 dias antes', 31, 1e9]];
+    return f.map(([faixa, a, b]) => ({faixa, n: prazos_finalizados.filter(r => r.folga >= a && r.folga <= b).length}));
+  }
+});
+
 window.apSel = window.apSel || null;
 </script>
 
@@ -691,6 +815,38 @@ function hbars(id, rows, lk, vk, lab, valFmt, extra, color) {
     .attr('width', r => Math.max(2, x(r[vk]) - x0)).attr('fill', r => color(r));
   g.append('text').attr('x', r => x(r[vk]) + 6).attr('y', by + 8).attr('dy', '0.32em')
     .attr('fill', 'var(--color-fg-muted)').attr('font-size', 12).text(r => valFmt(r) + (extra ? extra(r) : ''));
+}
+
+function drawPrazos() {
+  const A = dash.data('prazos_abertos'), F = dash.data('prazos_finalizados'), Fo = dash.data('prazos_folga'), S = dash.data('prazos_resumo');
+  if (S.status === 'ok' && S.data.length) {
+    document.querySelectorAll('[data-source="prazos_resumo"]').forEach(el => { el.classList.remove('dash-skeleton'); const v = S.data[0][el.dataset.field]; el.textContent = v == null ? '—' : (el.dataset.field === 'folga_mediana' ? f1(v).replace(/\.0$/, '') : d3.format(',')(v)); });
+  }
+  const ta = document.querySelector('#t-prazo-ab tbody'); ta.textContent = '';
+  if (A.status === 'ok') A.data.forEach(r => {
+    const tr = document.createElement('tr'); tr.className = 'clickable'; tr.dataset.key = r.processo; tr.dataset.proc = r.processo; tr.tabIndex = 0;
+    cell(tr, r.processo); const tn = cell(tr, ''); if (r.responsavel) tn.append(avatar(r.responsavel.split('/')[0].trim()), document.createTextNode(r.responsavel)); else tn.textContent = 'Sem responsável';
+    cell(tr, r.objeto); cell(tr, r.assunto); cell(tr, fmtD(r.vencimento));
+    const td = cell(tr, '', 'num'); const ch = document.createElement('span');
+    ch.className = 'chip ' + (r.dias < 0 ? 'f3' : r.dias <= 30 ? 'f2' : 'f0');
+    ch.textContent = r.dias < 0 ? 'Vencido há ' + d3.format(',')(-r.dias) + ' dias' : r.dias === 0 ? 'Vence hoje' : 'Vence em ' + r.dias + ' dias';
+    td.appendChild(ch);
+    tr.onclick = () => select({processo: r.processo, objeto: r.objeto, assunto: r.assunto, chegada: ''}); tr.onkeydown = e => { if (e.key === 'Enter') tr.onclick(); };
+    ta.appendChild(tr);
+  });
+  const tf = document.querySelector('#t-prazo-fin tbody'); tf.textContent = '';
+  if (F.status === 'ok') F.data.forEach(r => {
+    const tr = document.createElement('tr'); tr.className = 'clickable' + (r.folga < 0 ? ' late' : ''); tr.dataset.key = r.id; tr.dataset.proc = r.processo; tr.tabIndex = 0;
+    cell(tr, r.processo); cell(tr, r.assunto); cell(tr, fmtD(r.vencimento)); cell(tr, fmtD(r.finalizado.slice(0, 10)));
+    cell(tr, r.folga < 0 ? d3.format(',')(-r.folga) + ' dias depois' : r.folga + ' dias antes', 'num');
+    tr.onclick = () => select({processo: r.processo, assunto: r.assunto, chegada: ''}); tr.onkeydown = e => { if (e.key === 'Enter') tr.onclick(); };
+    tf.appendChild(tr);
+  });
+  if (Fo.status === 'ok') {
+    const cols = ['var(--cds-chart-status-critical)', '#f2994a', PAL[0], PAL[2]];
+    const idx = Object.fromEntries(Fo.data.map((r, i) => [r.faixa, i]));
+    hbars('ch-folga', Fo.data, 'faixa', 'n', r => r.faixa, r => d3.format(',')(r.n), null, r => cols[idx[r.faixa]]);
+  } else failed(document.getElementById('ch-folga'), Fo.status);
 }
 
 function drawCat(rows, geral) {
@@ -915,7 +1071,7 @@ document.getElementById('q-aba').addEventListener('input', drawAbaT);
 ['q-fin', 'f-tipo'].forEach(i => document.getElementById(i).addEventListener('input', drawFin));
 ['q-ab', 'f-faixa'].forEach(i => document.getElementById(i).addEventListener('input', drawAb));
 
-const TABS = ['geral', 'pessoas-tab', 'processos', 'aba-tab', 'metodo-tab'];
+const TABS = ['geral', 'prazos-tab', 'pessoas-tab', 'processos', 'aba-tab', 'metodo-tab'];
 function showTab(id, scrollTo) {
   if (!TABS.includes(id)) return;
   document.querySelectorAll('.ap .tab').forEach(t => { t.hidden = t.dataset.tab !== id; });
@@ -926,6 +1082,7 @@ function showTab(id, scrollTo) {
   if (scrollTo) { const el = document.getElementById(scrollTo); if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
 }
 document.querySelectorAll('.ap .tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.go)));
+{ const tp = document.getElementById('tile-prazo'); tp.addEventListener('click', () => showTab('prazos-tab')); tp.addEventListener('keydown', e => { if (e.key === 'Enter') showTab('prazos-tab'); }); }
 
 const AVC = {};
 function avatar(name) {
@@ -1147,6 +1304,7 @@ window.apRender = () => {
     const dlt = Number(est.data[est.data.length - 1].em_aberto_fim) - Number(est.data[0].em_aberto_inicio);
     const de = document.getElementById('d-estoque'); de.textContent = (dlt > 0 ? '+' : '−') + Math.abs(dlt) + ' desde janeiro'; de.style.color = dlt <= 0 ? 'var(--color-ok)' : 'var(--color-bad)';
   }
+  drawPrazos();
   drawFin(); drawAb(); drawTimeline();
 };
 dash.onData(() => window.apRender());
