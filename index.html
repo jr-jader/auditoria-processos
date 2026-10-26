@@ -187,8 +187,8 @@ window.__RAW = {"finalizados": "id,processo,etapa,responsavel,objeto,assunto,cat
       <div class="chart dash-skeleton" id="ch-mes" data-source="por_mes"></div>
     </div>
     <div class="card" id="c-cat">
-      <h2>Tempo de ciclo por categoria</h2>
-      <p class="note">Mediana de dias entre a chegada e a finalização. Só processos no prazo. Número ao lado: quantidade.</p>
+      <h2>Quanto tempo leva cada tipo de processo</h2>
+      <p class="note">Dias típicos (mediana) da chegada até a finalização, do mais rápido para o mais lento. Quanto menor a barra, mais rápido. A linha tracejada é o tempo típico geral. Só processos no prazo.</p>
       <div class="chart dash-skeleton" id="ch-cat" data-source="por_categoria"></div>
     </div>
     <div class="card" id="c-hora">
@@ -466,7 +466,7 @@ dash.calc('por_categoria', {
   fn: (finalizados) => {
     const g = d3.group(finalizados.filter(r => r.tipo === 'No prazo'), r => r.categoria);
     return [...g].map(([categoria, rs]) => ({categoria, n: rs.length, mediana: Math.round(d3.median(rs, r => Number(r.dias_chegada_fim)) * 10) / 10}))
-      .sort((a, b) => b.mediana - a.mediana);
+      .sort((a, b) => a.mediana - b.mediana);
   }
 });
 
@@ -691,6 +691,42 @@ function hbars(id, rows, lk, vk, lab, valFmt, extra, color) {
     .attr('width', r => Math.max(2, x(r[vk]) - x0)).attr('fill', r => color(r));
   g.append('text').attr('x', r => x(r[vk]) + 6).attr('y', by + 8).attr('dy', '0.32em')
     .attr('fill', 'var(--color-fg-muted)').attr('font-size', 12).text(r => valFmt(r) + (extra ? extra(r) : ''));
+}
+
+function drawCat(rows, geral) {
+  const box = document.getElementById('ch-cat');
+  box.classList.remove('dash-skeleton');
+  box.querySelectorAll('svg').forEach(s => s.remove());
+  const W = Math.max(260, box.clientWidth), rowH = 44, top = geral != null ? 22 : 4, H = top + rows.length * rowH + 4;
+  const probe = d3.select(box).append('svg').attr('width', 0).attr('height', 0);
+  let lw = 0;
+  rows.forEach(r => { const t = probe.append('text').attr('font-size', 13).text(r.categoria); lw = Math.max(lw, t.node().getComputedTextLength()); });
+  probe.remove();
+  const stacked = lw + 16 > W * 0.42;
+  const x0 = stacked ? 0 : lw + 16, endW = 70;
+  const x = d3.scaleLinear([0, d3.max(rows, r => r.mediana) || 1], [x0, W - endW]);
+  const svg = d3.select(box).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+  const t = tipFor(box);
+  const g = svg.append('g').selectAll('g').data(rows).join('g').attr('transform', (r, i) => `translate(0,${top + i * rowH})`)
+    .on('mousemove', (e, r) => { const [px, py] = d3.pointer(e, box); showTip(box, t, px, py, r.categoria, f1(r.mediana) + ' dias típicos · ' + r.n + ' processos'); })
+    .on('mouseleave', () => { t.hidden = true; });
+  const poucos = r => r.n < 5;
+  const nameY = stacked ? 9 : 15, subY = stacked ? 0 : 31, barY = stacked ? 18 : 8, barH = stacked ? 14 : 18;
+  g.append('text').attr('x', stacked ? 0 : x0 - 12).attr('y', nameY).attr('dy', '0.32em').attr('text-anchor', stacked ? 'start' : 'end')
+    .attr('font-size', 13).attr('font-weight', 600).attr('fill', 'var(--color-fg)').text(r => r.categoria);
+  g.append('text').attr('x', stacked ? x0 : x0 - 12).attr('y', stacked ? barY + barH + 9 : subY).attr('dy', '0.32em').attr('text-anchor', stacked ? 'start' : 'end')
+    .attr('font-size', 11).attr('fill', 'var(--color-fg-muted)').text(r => r.n + ' processos' + (poucos(r) ? ' · poucos casos' : ''));
+  g.append('rect').attr('x', x0).attr('y', barY).attr('height', barH).attr('rx', 5)
+    .attr('width', r => Math.max(3, x(r.mediana) - x0)).attr('fill', r => poucos(r) ? 'var(--cds-chart-muted)' : PAL[0]);
+  g.append('text').attr('x', r => x(r.mediana) + 8).attr('y', barY + barH / 2).attr('dy', '0.32em')
+    .attr('font-size', 13).attr('font-weight', 600).attr('fill', 'var(--color-fg)').text(r => f1(r.mediana).replace(/\.0$/, '') + ' dias');
+  if (geral != null) {
+    const gx = x(geral);
+    svg.append('line').attr('x1', gx).attr('x2', gx).attr('y1', 16).attr('y2', H - 2)
+      .attr('stroke', 'var(--cds-chart-reference)').attr('stroke-width', 1.5).attr('stroke-dasharray', '4 4');
+    svg.append('text').attr('x', gx).attr('y', 9).attr('text-anchor', gx > W - 90 ? 'end' : 'middle')
+      .attr('font-size', 11).attr('fill', 'var(--color-fg-muted)').text('Geral: ' + f1(geral).replace(/\.0$/, '') + ' dias');
+  }
 }
 
 function sortable(table, state, redraw) {
@@ -1090,7 +1126,8 @@ window.apRender = () => {
   if (ac.status === 'ok') hbars('ch-aba-cat', ac.data, 'categoria', 'n', r => r.categoria, r => d3.format(',')(r.n), null, () => PAL[0]);
   else failed(document.getElementById('ch-aba-cat'), ac.status);
   drawAbaT(); drawRm();
-  if (cat.status === 'ok') hbars('ch-cat', cat.data, 'categoria', 'mediana', r => r.categoria, r => f1(r.mediana) + ' d', r => ' · ' + r.n, r => r.n >= 5 ? PAL[0] : 'var(--cds-chart-muted)');
+  const kk = dash.data('kpis');
+  if (cat.status === 'ok') drawCat(cat.data, kk.status === 'ok' && kk.data.length ? kk.data[0].mediana : null);
   else failed(document.getElementById('ch-cat'), cat.status);
   if (hr.status === 'ok') vbars('ch-hora', hr.data, 'hora', 'finalizados', h => h + 'h', r => r.hora + 'h – ' + r.hora + 'h59', r => r.finalizados + ' finalizações', r => r.hora === 8);
   else failed(document.getElementById('ch-hora'), hr.status);
