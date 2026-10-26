@@ -188,7 +188,7 @@ window.__RAW = {"finalizados": "id,processo,etapa,responsavel,objeto,assunto,cat
     </div>
     <div class="card" id="c-cat">
       <h2>Quanto tempo leva cada tipo de processo</h2>
-      <p class="note">Dias típicos (mediana) da chegada até a finalização, do mais rápido para o mais lento. Quanto menor a barra, mais rápido. A linha tracejada é o tempo típico geral. Só processos no prazo.</p>
+      <p class="note">Dias típicos (mediana) da chegada até a finalização, do mais rápido para o mais lento. Quanto menor a barra, mais rápido. Só processos no prazo.</p>
       <div class="chart dash-skeleton" id="ch-cat" data-source="por_categoria"></div>
     </div>
     <div class="card" id="c-hora">
@@ -1126,8 +1126,7 @@ window.apRender = () => {
   if (ac.status === 'ok') hbars('ch-aba-cat', ac.data, 'categoria', 'n', r => r.categoria, r => d3.format(',')(r.n), null, () => PAL[0]);
   else failed(document.getElementById('ch-aba-cat'), ac.status);
   drawAbaT(); drawRm();
-  const kk = dash.data('kpis');
-  if (cat.status === 'ok') drawCat(cat.data, kk.status === 'ok' && kk.data.length ? kk.data[0].mediana : null);
+  if (cat.status === 'ok') drawCat(cat.data, null);
   else failed(document.getElementById('ch-cat'), cat.status);
   if (hr.status === 'ok') vbars('ch-hora', hr.data, 'hora', 'finalizados', h => h + 'h', r => r.hora + 'h – ' + r.hora + 'h59', r => r.finalizados + ' finalizações', r => r.hora === 8);
   else failed(document.getElementById('ch-hora'), hr.status);
